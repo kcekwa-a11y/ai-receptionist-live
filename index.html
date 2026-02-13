@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ekwa Labs — AI Receptionist Live Prototype</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:4px}
+body{height:100vh;display:flex;flex-direction:column;background:linear-gradient(145deg,#0a0e1a 0%,#111827 50%,#0f172a 100%);color:#e2e8f0;font-family:'DM Sans','Segoe UI',system-ui,sans-serif;overflow:hidden}
+input::placeholder{color:#475569}
+@keyframes fadeInUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+@keyframes notifSlide{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+@keyframes typingBounce{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-5px);opacity:1}}
+
+.grain{position:fixed;inset:0;opacity:.03;pointer-events:none;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+#notifs{position:fixed;top:16px;right:16px;z-index:100;display:flex;flex-direction:column;gap:6px}
+.notif{background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:500;color:#86efac;animation:notifSlide .3s ease-out}
+
+.header{padding:12px 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.06);background:rgba(0,0,0,.2);flex-shrink:0}
+.logo{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#fff}
+.hdr-l{display:flex;align-items:center;gap:10px}
+.hdr-r{display:flex;align-items:center;gap:10px}
+.end-btn{padding:5px 12px;border-radius:6px;font-size:11px;font-weight:600;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#fca5a5;cursor:pointer;font-family:inherit}
+.end-btn:hover{background:rgba(239,68,68,.18)}
+.status{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:500}
+.status-dot{width:6px;height:6px;border-radius:50%}
+
+.main{flex:1;display:grid;grid-template-columns:1fr 360px;min-height:0}
+@media(max-width:800px){.main{grid-template-columns:1fr}.dash{display:none}}
+.chat-panel{display:flex;flex-direction:column;border-right:1px solid rgba(255,255,255,.06)}
+.msgs{flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:4px}
+
+.idle{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:20px}
+.call-btn{width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,#22c55e,#16a34a);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .3s;box-shadow:0 0 40px rgba(34,197,94,.2);border:none}
+.call-btn:hover:not(:disabled){transform:scale(1.08);box-shadow:0 0 60px rgba(34,197,94,.35)}
+.call-btn:disabled{opacity:.4;cursor:default;transform:none;box-shadow:none}
+
+.key-gate{display:flex;flex-direction:column;align-items:center;gap:12px;width:100%;max-width:400px;padding:0 20px}
+.key-input{width:100%;padding:10px 14px;border-radius:8px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#e2e8f0;font-size:13px;font-family:inherit;outline:none;text-align:center}
+.key-input:focus{border-color:rgba(99,102,241,.4)}
+.key-note{font-size:11px;color:#475569;text-align:center;line-height:1.6;max-width:340px}
+.key-link{color:#93c5fd;text-decoration:none}
+.key-link:hover{text-decoration:underline}
+
+.tip{text-align:center;padding:8px 16px;margin:0 auto 12px;background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.1);border-radius:8px;font-size:11px;color:#64748b;max-width:460px}
+
+.msg-row{display:flex;margin-bottom:6px;animation:fadeInUp .3s ease-out}
+.msg-row.ai{justify-content:flex-start}
+.msg-row.patient{justify-content:flex-end}
+.msg-inner{display:flex;gap:8px;max-width:80%;align-items:flex-start}
+.avatar{width:28px;height:28px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;margin-top:2px}
+.av-ai{background:linear-gradient(135deg,#3b82f6,#8b5cf6)}
+.av-pt{background:linear-gradient(135deg,#6366f1,#8b5cf6)}
+.msg-label{font-size:10px;color:#64748b;margin-bottom:3px;font-weight:500}
+.msg-label.right{text-align:right}
+.bubble{padding:10px 14px;font-size:13px;line-height:1.55;color:#e2e8f0}
+.bubble.ai{border-radius:4px 14px 14px 14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08)}
+.bubble.pt{border-radius:14px 4px 14px 14px;background:linear-gradient(135deg,rgba(59,130,246,.2),rgba(139,92,246,.15));border:1px solid rgba(99,102,241,.2)}
+
+.typing{display:flex;gap:8px;animation:fadeInUp .2s ease-out;margin-bottom:6px}
+.typing-bubble{padding:12px 16px;border-radius:4px 14px 14px 14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06)}
+.dots{display:flex;gap:4px}
+.dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.4)}
+.dot:nth-child(1){animation:typingBounce 1.2s ease-in-out 0s infinite}
+.dot:nth-child(2){animation:typingBounce 1.2s ease-in-out .15s infinite}
+.dot:nth-child(3){animation:typingBounce 1.2s ease-in-out .3s infinite}
+
+.input-bar{padding:12px 20px;border-top:1px solid rgba(255,255,255,.06);background:rgba(0,0,0,.15);display:flex;gap:8px}
+.msg-input{flex:1;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:#e2e8f0;font-size:13px;font-family:inherit;outline:none;transition:border .2s}
+.msg-input:focus{border-color:rgba(99,102,241,.4)}
+.send-btn{width:40px;height:40px;border-radius:10px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;transition:all .2s}
+
+.dash{background:rgba(0,0,0,.2);overflow-y:auto}
+.dash-hdr{padding:12px 18px;border-bottom:1px solid rgba(255,255,255,.06);font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;background:rgba(0,0,0,.15)}
+.dash-body{padding:14px 18px;display:flex;flex-direction:column;gap:14px}
+.card{padding:14px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);transition:all .4s}
+.card-title{font-size:10px;font-weight:600;color:#64748b;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em}
+
+.intent-tag{display:inline-flex;padding:4px 10px;border-radius:5px;font-size:12px;font-weight:600;animation:fadeInUp .3s ease-out}
+.field-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.03)}
+.field-label{font-size:11px;color:#64748b;font-weight:500}
+.field-val{font-size:11px;color:#e2e8f0;font-weight:500;display:flex;align-items:center;gap:4px;animation:fadeInUp .3s ease-out;max-width:180px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.field-empty{font-size:11px;color:#334155;font-family:'JetBrains Mono',monospace}
+
+.appt-status{display:inline-flex;padding:3px 8px;border-radius:5px;font-size:10px;font-weight:600;margin-bottom:8px}
+.sys-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.sys-label{font-size:11px;color:#64748b}
+.sys-badge{font-size:9px;font-weight:600;padding:2px 7px;border-radius:4px}
+.badge-green{background:rgba(34,197,94,.12);color:#86efac}
+.badge-blue{background:rgba(59,130,246,.12);color:#93c5fd}
+.badge-gray{background:rgba(255,255,255,.04);color:#475569}
+
+.urgency-card{padding:14px;border-radius:10px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);animation:fadeInUp .3s ease-out}
+
+.error-msg{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:10px 14px;font-size:12px;color:#fca5a5;margin:0 auto 8px;max-width:460px;text-align:center}
+</style>
+</head>
+<body>
+<div class="grain"></div>
+<div id="notifs"></div>
+
+<div class="header">
+  <div class="hdr-l">
+    <div class="logo">E</div>
+    <div>
+      <div style="font-weight:600;font-size:14px">Ekwa Labs</div>
+      <div style="font-size:10px;color:#64748b">AI Receptionist — Live Prototype</div>
+    </div>
+  </div>
+  <div class="hdr-r">
+    <button id="endBtn" class="end-btn" style="display:none" onclick="endCall()">End Call</button>
+    <div id="statusBadge" class="status" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08)">
+      <div id="statusDot" class="status-dot" style="background:#475569"></div>
+      <span id="statusText">Ready</span>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="chat-panel">
+    <div id="chatArea" class="msgs">
+      <div id="idleScreen" class="idle">
+        <button id="callBtn" class="call-btn" onclick="startCall()" disabled>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        </button>
+        <div style="text-align:center">
+          <div style="font-size:17px;font-weight:600;margin-bottom:6px">Start Live Call</div>
+          <div style="font-size:13px;color:#64748b;max-width:340px;line-height:1.5">
+            Talk to <strong style="color:#e2e8f0">Emma</strong>, the AI receptionist for Bright Smile Dental. This is a <strong style="color:#e2e8f0">real AI</strong> — type anything and get live responses.
+          </div>
+        </div>
+        <div class="key-gate">
+          <input id="apiKeyInput" class="key-input" type="password" placeholder="Paste your Anthropic API key to activate" oninput="checkKey()">
+          <div class="key-note">
+            Get a key at <a href="https://console.anthropic.com/settings/keys" target="_blank" class="key-link">console.anthropic.com</a><br>
+            Your key stays in your browser — it's only sent to Anthropic's API.
+          </div>
+        </div>
+        <div style="display:flex;gap:14px;font-size:11px;color:#475569">
+          <span>🤖 Powered by Claude</span>
+          <span>💬 Real conversation</span>
+          <span>📊 Live data capture</span>
+        </div>
+      </div>
+    </div>
+    <div id="inputBar" class="input-bar" style="display:none">
+      <input id="msgInput" class="msg-input" placeholder="Type as a patient..." onkeydown="if(event.key==='Enter')sendMsg()">
+      <button id="sendBtn" class="send-btn" style="background:rgba(255,255,255,.05)" onclick="sendMsg()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="dash">
+    <div class="dash-hdr">Practice Dashboard — Live View</div>
+    <div class="dash-body">
+      <div class="card">
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px">Bright Smile Dental</div>
+        <div style="font-size:11px;color:#64748b;line-height:1.7">1240 Oak Street, Suite 200, Austin, TX 78701<br>Mon–Fri 8:00 AM – 5:00 PM<br>Dr. Sarah Chen · Dr. Michael Torres</div>
+      </div>
+
+      <div id="intentCard" class="card">
+        <div class="card-title">Call Classification</div>
+        <div id="intentContent" style="font-size:12px;color:#475569">Awaiting classification...</div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div class="card-title" style="margin-bottom:0">Patient Information</div>
+          <div id="fieldCount" style="font-size:10px;color:#64748b;font-weight:500"></div>
+        </div>
+        <div id="fieldsArea">
+          <div class="field-row"><span class="field-label">Full Name</span><span id="f-name" class="field-empty">—</span></div>
+          <div class="field-row"><span class="field-label">Date of Birth</span><span id="f-dob" class="field-empty">—</span></div>
+          <div class="field-row"><span class="field-label">Phone</span><span id="f-phone" class="field-empty">—</span></div>
+          <div class="field-row"><span class="field-label">Email</span><span id="f-email" class="field-empty">—</span></div>
+          <div class="field-row"><span class="field-label">Insurance</span><span id="f-insurance" class="field-empty">—</span></div>
+          <div class="field-row"><span class="field-label">Chief Concern</span><span id="f-chief_complaint" class="field-empty">—</span></div>
+          <div class="field-row"><span class="field-label">Referral Source</span><span id="f-referral_source" class="field-empty">—</span></div>
+        </div>
+      </div>
+
+      <div id="apptCard" class="card">
+        <div class="card-title">Appointment</div>
+        <div id="apptContent" style="font-size:12px;color:#475569">No appointment yet</div>
+      </div>
+
+      <div id="urgencyCard" class="urgency-card" style="display:none">
+        <div id="urgencyTitle" style="font-size:10px;font-weight:600;color:#fca5a5;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px"></div>
+        <div id="urgencyText" style="font-size:12px;color:#fca5a5"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">System Status</div>
+        <div>
+          <div class="sys-row"><span class="sys-label">AI Engine</span><span id="sys-ai" class="sys-badge badge-gray">STANDBY</span></div>
+          <div class="sys-row"><span class="sys-label">Open Dental PMS</span><span id="sys-pms" class="sys-badge badge-gray">STANDBY</span></div>
+          <div class="sys-row"><span class="sys-label">SMS System</span><span id="sys-sms" class="sys-badge badge-gray">READY</span></div>
+          <div class="sys-row"><span class="sys-label">HIPAA Compliance</span><span id="sys-hipaa" class="sys-badge badge-blue">ACTIVE</span></div>
+        </div>
+      </div>
+
+      <div id="exchangeCard" class="card" style="display:none">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:#64748b">
+          <span>Exchanges</span>
+          <span id="exchangeCount" style="color:#94a3b8;font-weight:600">0</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SYS = `You are Emma, a friendly and professional AI receptionist for Bright Smile Dental. You answer incoming calls/messages on behalf of the practice.
+
+## YOUR IDENTITY
+- Your name is Emma
+- You work at Bright Smile Dental
+- You are an AI assistant — if asked, confirm honestly
+- Never claim to be a human, dentist, or medical professional
+- Never provide clinical advice, diagnosis, or treatment recommendations
+
+## YOUR PERSONALITY
+- Warm, patient, and genuinely helpful
+- Use contractions naturally ("I'd", "we'll", "that's")
+- Keep responses concise — 1-3 sentences per turn
+- Mirror the caller's energy
+- Use the patient's name after learning it (not excessively)
+
+## PRACTICE INFORMATION
+- Practice: Bright Smile Dental
+- Address: 1240 Oak Street, Suite 200, Austin, TX 78701
+- Phone: (555) 234-8900
+- Hours: Mon-Fri 8:00 AM - 5:00 PM
+- Providers: Dr. Sarah Chen (Mon-Fri), Dr. Michael Torres (Tue/Thu)
+- Services: General Dentistry, Cosmetic, Implants, Orthodontics, Pediatric, Emergency
+- Insurance Accepted: Delta Dental, Cigna, Aetna, MetLife, Guardian, United Healthcare
+- Parking: Free in building lot, enter from Oak Street
+- New Patient Exam: ~60 minutes
+- Website: www.brightsmile.com
+
+## AVAILABLE APPOINTMENT SLOTS
+- Tuesday, February 17th at 10:00 AM (Dr. Sarah Chen)
+- Tuesday, February 17th at 2:30 PM (Dr. Sarah Chen)
+- Wednesday, February 18th at 9:00 AM (Dr. Sarah Chen)
+- Thursday, February 19th at 11:00 AM (Dr. Michael Torres)
+- Thursday, February 19th at 3:00 PM (Dr. Sarah Chen)
+
+## CALL HANDLING
+1. NEW PATIENT BOOKING - Handle fully (primary flow)
+2. EXISTING PATIENT - Take info for callback
+3. EMERGENCY - Take info and flag urgent
+4. GENERAL QUESTION - Answer if possible, otherwise take info for callback
+5. SPAM - Politely decline
+
+### NEVER:
+- Give clinical advice
+- Quote prices (say "Our team can provide a detailed estimate at your visit")
+- Guarantee insurance coverage (say "We accept [carrier] and will verify your benefits before your appointment")
+- Make promises about wait times or outcomes
+
+### NEW PATIENT BOOKING FLOW
+1. Greeting 2. New/existing? 3. Referral source (brief) 4. Chief complaint 5. Insurance 6. Collect: name, DOB, phone, email 7. Offer slots 8. Confirm 9. Pre-appointment instructions 10. Wrap up
+Collect info naturally — don't rapid-fire questions.
+
+## CRITICAL: RESPONSE FORMAT
+After EVERY response, include a JSON metadata block at the end. Patient will NOT see this. Format:
+
+\`\`\`json_meta
+{"intent":"unknown","name":null,"dob":null,"phone":null,"email":null,"insurance":null,"chief_complaint":null,"referral_source":null,"appointment":null,"booking_status":"in_progress","urgency":"normal"}
+\`\`\`
+
+Rules: intent = new_patient_booking/existing_patient/emergency/general_question/spam/unknown. All patient fields null until explicitly provided. appointment null until booked then "Tue Feb 17, 10:00 AM, Dr. Sarah Chen" format. booking_status = in_progress/confirmed/no_booking/escalated. urgency = normal/urgent/emergency. ALWAYS include ALL fields.`;
+
+let apiKey="", conversation=[], metadata={}, prevMeta={}, callActive=false, callStart=null, timerInt=null, msgCount=0, isLoading=false;
+const $=id=>document.getElementById(id);
+const FIELDS=["name","dob","phone","email","insurance","chief_complaint","referral_source"];
+const FLABELS={name:"patient name",dob:"date of birth",phone:"phone number",email:"email",insurance:"insurance",chief_complaint:"chief concern",referral_source:"referral source"};
+
+function checkKey(){ apiKey=$("apiKeyInput").value.trim(); $("callBtn").disabled=apiKey.length<10; }
+
+function addNotif(t){
+  const el=document.createElement("div"); el.className="notif"; el.textContent=t;
+  $("notifs").appendChild(el); setTimeout(()=>el.remove(),3000);
+}
+
+function parseMeta(t){
+  const m=t.match(/```json_meta\s*([\s\S]*?)```/);
+  if(!m)return null; try{return JSON.parse(m[1].trim())}catch{return null}
+}
+
+function stripMeta(t){ return t.replace(/```json_meta[\s\S]*?```/,"").trim(); }
+
+function esc(t){ const d=document.createElement("div"); d.textContent=t; return d.innerHTML; }
+
+function addMsg(role,text){
+  const row=document.createElement("div"); row.className="msg-row "+role;
+  const isAi=role==="ai";
+  const icon=isAi?'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg>'
+    :'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+  let h='<div class="msg-inner">';
+  if(isAi) h+='<div class="avatar av-ai">'+icon+'</div>';
+  h+='<div><div class="msg-label'+(isAi?'':' right')+'">'+(isAi?'Emma · AI Receptionist':'You · Patient')+'</div><div class="bubble '+(isAi?'ai':'pt')+'">'+esc(text)+'</div></div>';
+  if(!isAi) h+='<div class="avatar av-pt">'+icon+'</div>';
+  h+='</div>'; row.innerHTML=h;
+  $("chatArea").appendChild(row); $("chatArea").scrollTop=$("chatArea").scrollHeight;
+}
+
+function showTyping(){
+  const el=document.createElement("div"); el.id="typingEl"; el.className="typing";
+  el.innerHTML='<div class="avatar av-ai"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg></div><div class="typing-bubble"><div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>';
+  $("chatArea").appendChild(el); $("chatArea").scrollTop=$("chatArea").scrollHeight;
+}
+function hideTyping(){ const el=$("typingEl"); if(el)el.remove(); }
+
+function updateTimer(){
+  if(!callActive)return;
+  const s=Math.floor((Date.now()-callStart)/1000);
+  $("statusText").textContent="Live · "+String(Math.floor(s/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0");
+}
+
+function setSys(id,st){
+  const el=$("sys-"+id);
+  if(st==="synced"||st==="sent"){el.className="sys-badge badge-green";el.textContent=st.toUpperCase()}
+  else if(st==="connected"||st==="active"){el.className="sys-badge badge-blue";el.textContent=st.toUpperCase()}
+  else{el.className="sys-badge badge-gray";el.textContent=st.toUpperCase()}
+}
+
+function showError(msg){
+  const existing=document.querySelector(".error-msg"); if(existing)existing.remove();
+  const el=document.createElement("div"); el.className="error-msg"; el.textContent=msg;
+  $("chatArea").appendChild(el); $("chatArea").scrollTop=$("chatArea").scrollHeight;
+}
+
+function updateDash(meta){
+  if(!meta)return;
+  prevMeta={...metadata}; metadata=meta;
+
+  const intents={
+    new_patient_booking:{bg:"rgba(59,130,246,.12)",br:"rgba(59,130,246,.25)",c:"#93c5fd",l:"📅 New Patient Booking"},
+    existing_patient:{bg:"rgba(139,92,246,.12)",br:"rgba(139,92,246,.25)",c:"#c4b5fd",l:"🔄 Existing Patient"},
+    emergency:{bg:"rgba(239,68,68,.12)",br:"rgba(239,68,68,.25)",c:"#fca5a5",l:"🚨 Emergency"},
+    general_question:{bg:"rgba(234,179,8,.12)",br:"rgba(234,179,8,.25)",c:"#fde047",l:"❓ General Question"},
+  };
+  if(meta.intent&&meta.intent!=="unknown"&&intents[meta.intent]){
+    const i=intents[meta.intent];
+    $("intentCard").style.background=i.bg;$("intentCard").style.borderColor=i.br;
+    $("intentContent").innerHTML='<span class="intent-tag" style="background:'+i.bg+';border:1px solid '+i.br+';color:'+i.c+'">'+i.l+'</span>';
+  }
+
+  let cnt=0;
+  FIELDS.forEach(k=>{
+    const el=$("f-"+k);
+    if(meta[k]){
+      cnt++;
+      el.className="field-val";
+      el.innerHTML='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> '+esc(meta[k]);
+      if(!prevMeta[k])addNotif("✓ Captured: "+FLABELS[k]);
+    }
+  });
+  $("fieldCount").textContent=cnt>0?cnt+"/"+FIELDS.length:"";
+
+  if(meta.appointment){
+    const conf=meta.booking_status==="confirmed";
+    $("apptCard").style.background=conf?"rgba(34,197,94,.06)":"rgba(234,179,8,.06)";
+    $("apptCard").style.borderColor=conf?"rgba(34,197,94,.15)":"rgba(234,179,8,.15)";
+    $("apptContent").innerHTML=(conf
+      ?'<div class="appt-status" style="background:rgba(34,197,94,.15);color:#86efac;border:1px solid rgba(34,197,94,.25)">✓ Confirmed</div>'
+      :'<div class="appt-status" style="background:rgba(234,179,8,.15);color:#fde047;border:1px solid rgba(234,179,8,.25)">⏳ Pending</div>')
+      +'<div style="font-size:12px;color:#94a3b8;line-height:1.7">'+esc(meta.appointment)+'</div>';
+    if(!prevMeta.appointment)addNotif("📅 Appointment booked!");
+    if(conf&&prevMeta.booking_status!=="confirmed"){addNotif("✅ Booking confirmed");setSys("pms","synced");setSys("sms","sent")}
+  }
+
+  if(meta.urgency&&meta.urgency!=="normal"){
+    $("urgencyCard").style.display="block";
+    $("urgencyTitle").textContent=meta.urgency==="emergency"?"⚠ Emergency":"⚠ Urgent";
+    $("urgencyText").textContent=meta.urgency==="emergency"?"Patient flagged as emergency — needs immediate attention":"Patient flagged as urgent — prioritize callback";
+  }else{$("urgencyCard").style.display="none"}
+}
+
+async function callAPI(msgs){
+  const res=await fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST",
+    headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+    body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,system:SYS,messages:msgs})
+  });
+  if(!res.ok){
+    const err=await res.json().catch(()=>({}));
+    if(err.error&&err.error.message){throw new Error(err.error.message)}
+    throw new Error("API error: "+res.status);
+  }
+  const data=await res.json();
+  return data.content?.map(b=>b.text||"").join("")||"";
+}
+
+async function startCall(){
+  callActive=true;callStart=Date.now();msgCount=0;metadata={};prevMeta={};conversation=[];
+  $("idleScreen").style.display="none";
+  $("inputBar").style.display="flex";
+  $("endBtn").style.display="block";
+  $("exchangeCard").style.display="block";
+  $("statusBadge").style.background="rgba(34,197,94,.1)";
+  $("statusBadge").style.borderColor="rgba(34,197,94,.2)";
+  $("statusDot").style.background="#22c55e";
+  $("statusDot").style.animation="pulse 2s infinite";
+  timerInt=setInterval(updateTimer,1000);
+  setSys("ai","active");setSys("pms","connected");
+
+  const tip=document.createElement("div");tip.className="tip";
+  tip.textContent='Try: "Hi, I\'d like to make an appointment" or "I have a toothache" or anything a real patient might say';
+  $("chatArea").appendChild(tip);
+
+  isLoading=true;showTyping();
+  try{
+    const raw=await callAPI([{role:"user",content:"The phone is ringing. A patient is calling. Answer the call with your greeting."}]);
+    const meta=parseMeta(raw),clean=stripMeta(raw);
+    conversation=[{role:"user",content:"The phone is ringing. A patient is calling. Answer the call with your greeting."},{role:"assistant",content:raw}];
+    hideTyping();addMsg("ai",clean);
+    msgCount=1;$("exchangeCount").textContent=msgCount;
+    if(meta)updateDash(meta);
+  }catch(e){
+    hideTyping();
+    showError("API Error: "+e.message+". Check your API key and try again.");
+    $("idleScreen").style.display="flex";$("inputBar").style.display="none";
+    $("endBtn").style.display="none";$("exchangeCard").style.display="none";
+    callActive=false;clearInterval(timerInt);
+    $("statusBadge").style.background="rgba(255,255,255,.05)";$("statusBadge").style.borderColor="rgba(255,255,255,.08)";
+    $("statusDot").style.background="#475569";$("statusDot").style.animation="none";$("statusText").textContent="Ready";
+    setSys("ai","standby");setSys("pms","standby");
+    isLoading=false;return;
+  }
+  isLoading=false;$("msgInput").focus();
+}
+
+async function sendMsg(){
+  const text=$("msgInput").value.trim();
+  if(!text||isLoading)return;
+  $("msgInput").value="";updateSendBtn("");
+  addMsg("patient",text);
+  msgCount++;$("exchangeCount").textContent=msgCount;
+  conversation.push({role:"user",content:text});
+  isLoading=true;showTyping();
+  try{
+    const raw=await callAPI(conversation);
+    const meta=parseMeta(raw),clean=stripMeta(raw);
+    conversation.push({role:"assistant",content:raw});
+    hideTyping();addMsg("ai",clean);
+    msgCount++;$("exchangeCount").textContent=msgCount;
+    if(meta)updateDash(meta);
+  }catch(e){
+    hideTyping();addMsg("ai","I'm sorry, I'm having a bit of trouble right now. Could you repeat that?");
+  }
+  isLoading=false;$("msgInput").focus();
+}
+
+function endCall(){
+  callActive=false;clearInterval(timerInt);
+  $("endBtn").style.display="none";
+  $("statusBadge").style.background="rgba(255,255,255,.05)";$("statusBadge").style.borderColor="rgba(255,255,255,.08)";
+  $("statusDot").style.background="#475569";$("statusDot").style.animation="none";$("statusText").textContent="Call Ended";
+  $("msgInput").disabled=true;$("msgInput").placeholder="Call ended";
+  setSys("ai","standby");addNotif("📋 Call ended — summary saved");
+}
+
+function updateSendBtn(v){$("sendBtn").style.background=v.trim()?"linear-gradient(135deg,#3b82f6,#6366f1)":"rgba(255,255,255,.05)"}
+$("msgInput").addEventListener("input",function(){updateSendBtn(this.value)});
+</script>
+</body>
+</html>
