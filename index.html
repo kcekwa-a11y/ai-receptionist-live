@@ -135,7 +135,7 @@ input::placeholder{color:#475569}
           </div>
         </div>
         <div class="key-gate">
-          <input id="apiKeyInput" class="key-input" type="password" placeholder="Paste your Anthropic API key to activate" oninput="checkKey()">
+          <input id="apiKeyInput" class="key-input" type="password" placeholder="Paste your Anthropic API key to activate" oninput="checkKey()" onkeydown="if(event.key==='Enter'&&!$('callBtn').disabled)startCall()">
           <div class="key-note">
             Get a key at <a href="https://console.anthropic.com/settings/keys" target="_blank" class="key-link">console.anthropic.com</a><br>
             Your key stays in your browser — it's only sent to Anthropic's API.
